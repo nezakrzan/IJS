@@ -1,0 +1,97 @@
+---
+title: "arma"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(astsa)
+```
+
+```{r}
+# uvoz podatkov
+data = read.csv("SEEDS_TP_A+_A-.csv", header=T)
+df = data.frame("time" = data$Time, moc = data$TP.BENCINSKI.SERVIS.3.2781_A._401)
+df = df[-1,]
+df$moc = as.numeric(df$moc)
+str(df)
+```
+
+```{r}
+moc.ts <- ts(df$moc, start = 2023) 
+plot.ts(moc.ts, type = "o", pch = 16, xlab = "index")
+abline(reg = lm(moc.ts ~ time(moc.ts)), col = "blue")
+gladilnik <- lowess(time(moc.ts),moc.ts)
+points(gladilnik$x, gladilnik$y, type="l", col = "red")
+```
+
+```{r}
+par(mfrow = c(1, 2))
+acf(df$moc, main = "avtokorelogram")
+pacf(df$moc, main = "parcialni avtokorelogram")
+```
+
+```{r}
+# izberem podatke
+df = df[df$time > "01/02/2023 00:00" & df$time < "03/03/2023 23:45", ]
+
+moc.ts <- ts(df$moc) 
+plot.ts(moc.ts, type = "o", pch = 16, xlab = "index")
+abline(reg = lm(moc.ts ~ time(moc.ts)), col = "blue")
+gladilnik <- lowess(time(moc.ts),moc.ts)
+points(gladilnik$x, gladilnik$y, type="l", col = "red")
+```
+
+```{r}
+par(mfrow = c(1, 2))
+acf(df$moc, main = "avtokorelogram")
+pacf(df$moc, main = "parcialni avtokorelogram")
+```
+
+```{r}
+par(mfrow = c(1, 2))
+acf(diff(df$moc, lag=1), main = "avtokorelogram - diferenciranje 1")
+pacf(diff(df$moc, lag=1), main = "parcialni avtokorelogram - diferenciranje 1")
+```
+
+
+```{r}
+# izbiramo model 
+# na podlagi AIC poišči kateri model in s kakšnim redom
+best.order <- c(0, 0, 0)
+best.aic <- Inf
+pmax <- 7
+qmax <- 3
+for (i in 0:pmax) {
+  for (j in 0:qmax) {
+    fit.aic <- AIC(arima(moc.ts, order = c(i, 1, j)))
+    if (fit.aic < best.aic){
+      best.order <- c(i, 1, j)
+      best.arma <- arima(moc.ts, order = best.order)
+      best.aic <- fit.aic
+    }
+  }
+}
+best.order
+best.arma
+```
+
+```{r}
+par(mfrow = c(1, 2))
+acf(best.arma$resid, main="acf ostankov za ARMA(1,1,3)")
+pacf(best.arma$resid, main="pacf ostankov za ARMA(1,1,3)")
+```
+
+```{r}
+sarima(moc.ts, p = 1, d = 1, q = 3, details = F)
+```
+```{r}
+forecast = 4*24
+temp.ucna <- window(moc.ts, start = 1, end = length(moc.ts) - forecast)
+temp.test <- window(moc.ts, start = length(moc.ts) - forecast + 1, end = length(moc.ts) )
+
+sarima.for(temp.ucna,  n.ahead = forecast, p = 1, d = 1, q = 3, plot.all = TRUE)
+points(temp.test, type = "o")
+
+```
+
